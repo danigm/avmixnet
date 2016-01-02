@@ -1,4 +1,17 @@
-#!/usr/bin/env python3
+'''
+>>> B = 64
+>>> k1 = AVCrypt(bits=B)
+>>> k2 = AVCrypt(k=k1.k, bits=B)
+>>> k3 = gen_multiple_key(k1, k2)
+>>> N = 4
+>>> clears = [random.StrongRandom().randint(1, B) for i in range(N)]
+>>> cipher = [k3.encrypt(i) for i in clears]
+>>> d = multiple_decrypt_shuffle(cipher, k1, k2)
+>>> clears == d
+False
+>>> sorted(clears) == sorted(d)
+True
+'''
 
 
 from pprint import pprint
@@ -18,7 +31,7 @@ def rand(p):
 
 def gen_multiple_key(*crypts):
     k1 = crypts[0]
-    k = Crypt(k=k1.k, bits=k1.bits)
+    k = AVCrypt(k=k1.k, bits=k1.bits)
     k.k.y = 1
     for kx in crypts:
         k.k.y *= kx.k.y
@@ -40,7 +53,7 @@ def multiple_decrypt_shuffle(ciphers, *crypts):
     return b
 
 
-class Crypt:
+class AVCrypt:
     def __init__(self, k=None, bits=256):
         self.bits = bits
         if k:
@@ -81,18 +94,6 @@ class Crypt:
         return msgs3
 
 
-B = 64
-k1 = Crypt(bits=B)
-k2 = Crypt(k=k1.k, bits=B)
-k3 = gen_multiple_key(k1, k2)
-
-print("K1", k1.k.g, k1.k.p, k1.k.y, k1.k.x)
-print("K2", k2.k.g, k2.k.p, k2.k.y, k2.k.x)
-print("K3", k3.k.g, k3.k.p, k3.k.y)
-
-N = 4
-clears = [random.StrongRandom().randint(1, B) for i in range(N)]
-cipher = [k3.encrypt(i) for i in clears]
-
-d = multiple_decrypt_shuffle(cipher, k1, k2)
-print(clears, d, sorted(clears) == sorted(d))
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()
