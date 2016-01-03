@@ -11,6 +11,26 @@
 False
 >>> sorted(clears) == sorted(d)
 True
+
+>>> B = 8
+>>> k1 = AVCrypt(bits=B)
+>>> k1.setk(167,156,89,130) #doctest: +ELLIPSIS
+<Crypto.PublicKey.ElGamal.ElGamalobj object at 0x...>
+>>> k2 = AVCrypt(bits=B)
+>>> k2.setk(167,156,53,161) #doctest: +ELLIPSIS
+<Crypto.PublicKey.ElGamal.ElGamalobj object at 0x...>
+>>> k3 = AVCrypt(bits=B)
+>>> k3.k = ElGamal.construct((167, 156, 4717))
+>>> k3.k.p, k3.k.g, k3.k.y
+(167, 156, 4717)
+>>> N = 4
+>>> clears = [2,3,6,4]
+>>> cipher = [(161, 109), (17, 101), (148, 163), (71, 37)]
+>>> d = multiple_decrypt_shuffle(cipher, k2, k1)
+>>> clears == d
+False
+>>> sorted(clears) == sorted(d)
+True
 '''
 
 
@@ -57,17 +77,23 @@ class AVCrypt:
     def __init__(self, k=None, bits=256):
         self.bits = bits
         if k:
-            self.k = self.getk(k)
+            self.k = self.getk(k.p, k.g)
         else:
             self.k = self.genk()
 
     def genk(self):
-        return ElGamal.generate(self.bits, Random.new().read)
+        self.k = ElGamal.generate(self.bits, Random.new().read)
+        return self.k
 
-    def getk(self, k):
-        x = rand(k.p)
-        y = pow(k.g, x, k.p)
-        return ElGamal.construct((k.p, k.g, y, x))
+    def getk(self, p, g):
+        x = rand(p)
+        y = pow(g, x, p)
+        self.k = ElGamal.construct((p, g, y, x))
+        return self.k
+
+    def setk(self, p, g, y, x):
+        self.k = ElGamal.construct((p, g, y, x))
+        return self.k
 
     def encrypt(self, m):
         r = rand(self.k.p)
