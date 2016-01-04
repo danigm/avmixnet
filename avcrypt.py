@@ -119,6 +119,27 @@ class AVCrypt:
 
         return msgs3
 
+    def reencrypt(self, cipher):
+        '''
+        >>> B = 64
+        >>> k = AVCrypt(bits=B)
+        >>> clears = [random.StrongRandom().randint(1, B) for i in range(5)]
+        >>> cipher = [k.encrypt(i) for i in clears]
+        >>> cipher2 = [k.reencrypt(i) for i in cipher]
+        >>> d = [k.decrypt(i) for i in cipher]
+        >>> d2 = [k.decrypt(i) for i in cipher2]
+        >>> clears == d == d2
+        True
+        >>> cipher != cipher2
+        True
+        '''
+
+        a, b = cipher
+        a1, b1 = self.encrypt(1)
+
+        return (a * a1, b * b1)
+
+
 
 if __name__ == "__main__":
     import doctest
