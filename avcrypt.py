@@ -55,6 +55,7 @@ def gen_multiple_key(*crypts):
     k.k.y = 1
     for kx in crypts:
         k.k.y *= kx.k.y
+    k.k.y = k.k.y % k.k.p
     return k
 
 
@@ -70,6 +71,35 @@ def multiple_decrypt_shuffle(ciphers, *crypts):
     for i, k in enumerate(crypts):
         last = i == len(crypts) - 1
         b = k.shuffle_decrypt(b, last)
+    return b
+
+def multiple_decrypt_shuffle2(ciphers, *crypts, pubkey=None):
+    '''
+    >>> B = 64
+    >>> k1 = AVCrypt(bits=B)
+    >>> k2 = AVCrypt(k=k1.k, bits=B)
+    >>> k3 = gen_multiple_key(k1, k2)
+    >>> pk = pubkey=(k3.k.p, k3.k.g, k3.k.y)
+    >>> N = 8
+    >>> clears = [random.StrongRandom().randint(1, B) for i in range(N)]
+    >>> cipher = [k3.encrypt(i) for i in clears]
+    >>> d = multiple_decrypt_shuffle2(cipher, k1, k2, pubkey=pk)
+    >>> clears == d
+    False
+    >>> sorted(clears) == sorted(d)
+    True
+    '''
+
+    b = ciphers.copy()
+
+    # shuffle
+    for k in crypts:
+        b = k.shuffle(b, pubkey)
+
+    # decrypt
+    for i, k in enumerate(crypts):
+        last = i == len(crypts) - 1
+        b = k.multiple_decrypt(b, last=last)
     return b
 
 
@@ -95,14 +125,27 @@ class AVCrypt:
         self.k = ElGamal.construct((p, g, y, x))
         return self.k
 
-    def encrypt(self, m):
+    def encrypt(self, m, k=None):
         r = rand(self.k.p)
-        a, b = self.k.encrypt(m, r)
+        if not k:
+            k = self.k
+        a, b = k.encrypt(m, r)
         return a, b
 
     def decrypt(self, c):
         m = self.k.decrypt(c)
         return m
+
+    def multiple_decrypt(self, msgs, last=True):
+        msgs2 = []
+        for a, b in msgs:
+            clear = self.decrypt((a, b))
+            if last:
+                msg = clear
+            else:
+                msg = (a, clear)
+            msgs2.append(msg)
+        return msgs2
 
     def shuffle_decrypt(self, msgs, last=True):
         msgs2 = msgs.copy()
@@ -119,7 +162,7 @@ class AVCrypt:
 
         return msgs3
 
-    def reencrypt(self, cipher):
+    def reencrypt(self, cipher, pubkey=None):
         '''
         >>> B = 64
         >>> k = AVCrypt(bits=B)
@@ -134,11 +177,39 @@ class AVCrypt:
         True
         '''
 
+        if pubkey:
+            p, g, y = pubkey
+            k = ElGamal.construct((p, g, y))
+        else:
+            k = self.k
+
         a, b = cipher
-        a1, b1 = self.encrypt(1)
+        a1, b1 = self.encrypt(1, k=k)
 
-        return (a * a1, b * b1)
+        return ((a * a1) % k.p, (b * b1) % k.p)
 
+    def gen_perm(self, l):
+        x = list(range(l))
+        for i in range(l):
+            d = random.StrongRandom().randint(0, i)
+            if i != d:
+                x[i] = x[d]
+                x[d] = i
+        return x
+
+    def shuffle(self, msgs, pubkey=None):
+        '''
+        Reencrypt and shuffle
+        '''
+
+        msgs2 = msgs.copy()
+        perm = self.gen_perm(len(msgs))
+        for i, p in enumerate(perm):
+            m = msgs[p]
+            nm = self.reencrypt(m, pubkey)
+            msgs2[i] = nm
+
+        return msgs2
 
 
 if __name__ == "__main__":

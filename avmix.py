@@ -60,6 +60,15 @@ class AVMixNet(socketserver.BaseRequestHandler):
             msgs = args[1:]
             mixs = mixs.split(b',')
             resp = self.decrypt(id, mixs, msgs)
+        elif command == b'SHUFFLE':
+            print("SHUFFLE %s" % id.decode())
+            mixs = args[0]
+            pk = args[1]
+            pk = tuple(int(i) for i in pk.split(b','))
+            self.save_pk(id, pk)
+            msgs = args[2:]
+            mixs = mixs.split(b',')
+            resp = self.shuffle(id, mixs, msgs)
         else:
             print('INVALID COMMAND:\n%s' % data.decode())
 
@@ -81,6 +90,12 @@ class AVMixNet(socketserver.BaseRequestHandler):
         with open(stpath, 'w') as f:
             f.write(key)
 
+    def save_pk(self, id, pk):
+        stpath = self.createdirs(id) + b'.pk'
+        key = '%d,%d,%d' % pk
+        with open(stpath, 'w') as f:
+            f.write(key)
+
     def load_key(self, id, avcrypt):
         stpath = self.createdirs(id)
         if os.path.exists(stpath):
@@ -89,6 +104,14 @@ class AVMixNet(socketserver.BaseRequestHandler):
             return True
         else:
             return False
+
+    def load_pk(self, id):
+        stpath = self.createdirs(id) + b'.pk'
+        if os.path.exists(stpath):
+            p, g, y = map(int, open(stpath).read().split(','))
+            return p, g, y
+        else:
+            return None
 
     def gen_key(self, id, mixs, p, g):
         avcrypt = AVCrypt(bits=B)
@@ -107,7 +130,7 @@ class AVMixNet(socketserver.BaseRequestHandler):
             resp = self.mix_req(others[0], b'GEN_KEY %s %s %d,%d' %
                     (id, b','.join(others), k.p, k.g))
             p, g, y = resp.split(b',')
-            y = int(y) * k.y
+            y = (int(y) * k.y) % k.p
             return b'%s,%s,%d' % (p, g, y)
         else:
             return b'%d,%d,%d' % (k.p, k.g, k.y)
@@ -122,6 +145,7 @@ class AVMixNet(socketserver.BaseRequestHandler):
         last = not others
         msgs = [list(map(int, i.split(b','))) for i in msgs]
         msgs = avcrypt.shuffle_decrypt(msgs, last)
+
         if not last:
             msgs = b' '.join(b'%d,%d' % (a, b) for a, b in msgs)
             resp = self.mix_req(others[0], b'DECRYPT %s %s %s' %
@@ -129,6 +153,26 @@ class AVMixNet(socketserver.BaseRequestHandler):
             return resp
         else:
             return b' '.join(b'%d' % i for i in msgs)
+
+    def shuffle(self, id, mixs, msgs):
+        avcrypt = AVCrypt(bits=B)
+        pk = self.load_pk(id)
+
+        me = mixs[0]
+        others = mixs[1:]
+        last = not others
+        msgs = [list(map(int, i.split(b','))) for i in msgs]
+        msgs = avcrypt.shuffle(msgs, pk)
+        msgs = b' '.join(b'%d,%d' % (a, b) for a, b in msgs)
+
+        epk = b'%d,%d,%d' % pk
+
+        if not last:
+            resp = self.mix_req(others[0], b'SHUFFLE %s %s %s %s' %
+                    (id, b','.join(others), epk, msgs))
+            return resp
+        else:
+            return msgs
 
 
 if __name__ == '__main__':
